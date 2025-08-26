@@ -45,17 +45,17 @@ export async function writeDB(db: DB) {
   await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf-8");
 }
 
-export function getOrSetUserIdCookie(): string {
-  const c = cookies();
-  const existing = c.get("mc_uid")?.value;
+export async function getOrSetUserIdCookie(): Promise<string> {
+  const cookieStore = await cookies();
+  const existing = cookieStore.get("mc_uid")?.value;
   if (existing) return existing;
   const id = randomUUID();
-  c.set("mc_uid", id, { httpOnly: false, sameSite: "lax", path: "/" });
+  cookieStore.set("mc_uid", id, { httpOnly: false, sameSite: "lax", path: "/" });
   return id;
 }
 
 export async function getOrCreateUser(username?: string): Promise<UserRow> {
-  const uid = getOrSetUserIdCookie();
+  const uid = await getOrSetUserIdCookie();
   const db = await readDB();
   let user = db.users[uid];
   if (!user) {
