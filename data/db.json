@@ -1,46 +1,10 @@
 {
   "users": {
-    "1f1cd1a4-41f0-4030-b106-1a5f2a80443e": {
-      "id": "1f1cd1a4-41f0-4030-b106-1a5f2a80443e",
-      "username": "Player-1f1cd1",
-      "score": 71,
-      "clicks": 71,
-      "boosters": {
-        "multiplier": 1,
-        "autoclick": 0,
-        "critChance": 0
-      },
-      "nfts": 0
-    },
-    "c564e8a4-5c92-4ef4-915d-2210db802bdd": {
-      "id": "c564e8a4-5c92-4ef4-915d-2210db802bdd",
-      "username": "Player-c564e8",
-      "score": 21,
-      "clicks": 21,
-      "boosters": {
-        "multiplier": 1,
-        "autoclick": 0,
-        "critChance": 0
-      },
-      "nfts": 0
-    },
     "25cf651a-b2f6-48b6-b407-421612c0f965": {
       "id": "25cf651a-b2f6-48b6-b407-421612c0f965",
       "username": "Player-25cf65",
-      "score": 20,
-      "clicks": 450,
-      "boosters": {
-        "multiplier": 5,
-        "autoclick": 0,
-        "critChance": 0
-      },
-      "nfts": 0
-    },
-    "86fa9b1a-03b3-43c2-9b0a-aad767fe1cc8": {
-      "id": "86fa9b1a-03b3-43c2-9b0a-aad767fe1cc8",
-      "username": "Player-86fa9b",
-      "score": 36,
-      "clicks": 36,
+      "score": 54,
+      "clicks": 54,
       "boosters": {
         "multiplier": 1,
         "autoclick": 0,
@@ -53,22 +17,7 @@
     {
       "id": "25cf651a-b2f6-48b6-b407-421612c0f965",
       "username": "Player-25cf65",
-      "score": 220
-    },
-    {
-      "id": "1f1cd1a4-41f0-4030-b106-1a5f2a80443e",
-      "username": "Player-1f1cd1",
-      "score": 71
-    },
-    {
-      "id": "86fa9b1a-03b3-43c2-9b0a-aad767fe1cc8",
-      "username": "Player-86fa9b",
-      "score": 36
-    },
-    {
-      "id": "c564e8a4-5c92-4ef4-915d-2210db802bdd",
-      "username": "Player-c564e8",
-      "score": 21
+      "score": 55
     }
   ]
 }

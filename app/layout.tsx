@@ -1,55 +1,68 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { FarcasterProvider } from "@/lib/farcaster-auth";
 
 export const metadata: Metadata = {
-  title: "Monad Clicker | Web3 Gaming on Lightning-Fast Blockchain",
-  description: "Click to earn tokens on Monad's blazing-fast blockchain! Unlock boosters, mint NFTs, and climb the leaderboards in this addictive Web3 clicker game.",
-  keywords: ["Monad", "Web3", "Clicker Game", "Blockchain", "NFT", "Gaming", "Farcaster"],
-  authors: [{ name: "Monad Clicker Team" }],
-  metadataBase: new URL('https://monad-clicker.vercel.app'), // Change this to your actual domain
+  title: "Monad Clicker",
+  description: "Click to earn on Monad blockchain! 🚀 Compete with friends and unlock epic boosters!",
   openGraph: {
     title: "Monad Clicker - Web3's Most Addictive Game",
     description: "Click, earn, and dominate on Monad blockchain! 🚀",
-    type: "website",
     images: [
       {
-        url: "/og-image.png", // You'll need to create this
-        width: 1200,
-        height: 630,
-        alt: "Monad Clicker Game"
+        url: "/monad-clicker-preview.png", // We'll need to create this
+        width: 600,
+        height: 400,
+        alt: "Monad Clicker Game Preview"
       }
     ]
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Monad Clicker - Web3 Gaming Revolution",
-    description: "The most addictive clicker game on blockchain! Click to earn on Monad ⚡",
-  },
+  other: {
+    // Farcaster MiniApp meta tags
+    "fc:miniapp": JSON.stringify({
+      name: "Monad Clicker",
+      description: "Click to earn on Monad blockchain! Compete with friends and unlock boosters!",
+      icon: "https://your-domain.com/icon.png",
+      homeUrl: "https://your-domain.com",
+      imageUrl: "https://your-domain.com/preview.png",
+      buttonTitle: "Play Now",
+      splashImageUrl: "https://your-domain.com/splash.png",
+      splashBackgroundColor: "#1e1b4b"
+    }),
+    // Backward compatibility
+    "fc:frame": "vNext",
+    "fc:frame:image": "https://your-domain.com/preview.png",
+    "fc:frame:button:1": "🎮 Play Monad Clicker",
+    "fc:frame:button:1:action": "link",
+    "fc:frame:button:1:target": "https://your-domain.com"
+  }
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   themeColor: '#7c3aed',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-      <body className="text-white antialiased">
-        <div className="min-h-screen relative overflow-hidden">
-          {/* Global background effects */}
-          <div className="fixed inset-0 pointer-events-none">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent"></div>
-            <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent"></div>
-          </div>
-          
-          {/* Content */}
-          <div className="relative z-10">
-            {children}
-          </div>
-        </div>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <style>{`
+          body { 
+            margin: 0; 
+            padding: 0; 
+            background: linear-gradient(135deg, #1e1b4b, #312e81, #3730a3);
+            color: white;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+          }
+        `}</style>
+      </head>
+      <body suppressHydrationWarning>
+        <FarcasterProvider>
+          {children}
+        </FarcasterProvider>
       </body>
     </html>
   );
