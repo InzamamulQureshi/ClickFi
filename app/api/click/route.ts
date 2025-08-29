@@ -28,13 +28,17 @@ export async function POST() {
         clicks: 0,
         boosters: { multiplier: 1, autoclick: 0, critChance: 0 },
         nfts: 0,
+        totalEarned: 0, // Initialize new field
       };
       db.users[user.id] = u;
     }
 
-    // Ensure boosters exist (in case of old data)
+    // Ensure all fields exist (for migration)
     if (!u.boosters) {
       u.boosters = { multiplier: 1, autoclick: 0, critChance: 0 };
+    }
+    if (typeof u.totalEarned !== 'number') {
+      u.totalEarned = u.score; // Approximate for existing users
     }
 
     // base gain = 1 per click
@@ -48,7 +52,10 @@ export async function POST() {
       gain *= 5; // crit = x5
     }
 
-    u.score += Math.floor(gain);
+    const finalGain = Math.floor(gain);
+    
+    u.score += finalGain;
+    u.totalEarned += finalGain; // Track total earnings
     u.clicks += 1;
 
     db.users[user.id] = u;
@@ -58,7 +65,8 @@ export async function POST() {
     return NextResponse.json({ 
       score: u.score, 
       clicks: u.clicks, 
-      gain: Math.floor(gain) 
+      gain: finalGain,
+      totalEarned: u.totalEarned
     });
   } catch (error) {
     console.error("Click API error:", error);

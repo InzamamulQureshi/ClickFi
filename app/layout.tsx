@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { FarcasterProvider } from "@/lib/farcaster-auth";
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://your-domain.com'), // Add this to fix the warning
   title: "Monad Clicker",
   description: "Click to earn on Monad blockchain! 🚀 Compete with friends and unlock epic boosters!",
   openGraph: {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
     description: "Click, earn, and dominate on Monad blockchain! 🚀",
     images: [
       {
-        url: "/monad-clicker-preview.png", // We'll need to create this
+        url: "/monad-clicker-preview.png",
         width: 600,
         height: 400,
         alt: "Monad Clicker Game Preview"
@@ -22,19 +23,19 @@ export const metadata: Metadata = {
     "fc:miniapp": JSON.stringify({
       name: "Monad Clicker",
       description: "Click to earn on Monad blockchain! Compete with friends and unlock boosters!",
-      icon: "https://your-domain.com/icon.png",
-      homeUrl: "https://your-domain.com",
-      imageUrl: "https://your-domain.com/preview.png",
+      icon: "/icon.png",
+      homeUrl: "/",
+      imageUrl: "/preview.png",
       buttonTitle: "Play Now",
-      splashImageUrl: "https://your-domain.com/splash.png",
+      splashImageUrl: "/splash.png",
       splashBackgroundColor: "#1e1b4b"
     }),
     // Backward compatibility
     "fc:frame": "vNext",
-    "fc:frame:image": "https://your-domain.com/preview.png",
+    "fc:frame:image": "/preview.png",
     "fc:frame:button:1": "🎮 Play Monad Clicker",
     "fc:frame:button:1:action": "link",
-    "fc:frame:button:1:target": "https://your-domain.com"
+    "fc:frame:button:1:target": "/"
   }
 };
 

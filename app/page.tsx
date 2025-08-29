@@ -10,6 +10,15 @@ type User = {
   clicks: number;
   boosters: { multiplier: number; autoclick: number; critChance: number };
   nfts: number;
+  totalEarned: number;
+  dailyMints: number;
+  lastMintDate: string;
+};
+
+type BoosterCosts = {
+  multiplier: number;
+  autoclick: number;
+  crit: number;
 };
 
 export default function HomePage() {
@@ -17,15 +26,19 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null);
   const [showShop, setShowShop] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
+  const [showNftMint, setShowNftMint] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ username: string; score: number }[]>([]);
+  const [leaderboardType, setLeaderboardType] = useState<'current' | 'alltime'>('current');
+  const [leaderboard, setLeaderboard] = useState<{ username: string; score?: number; totalEarned?: number }[]>([]);
   const [gainFlash, setGainFlash] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [boosterCosts, setBoosterCosts] = useState<BoosterCosts>({ multiplier: 1, autoclick: 1, crit: 2 });
+  const [pointsToSpend, setPointsToSpend] = useState(1000);
+  const [dailyMints, setDailyMints] = useState({ used: 0, remaining: 5, total: 5 });
 
   // Load user
   useEffect(() => {
     if (isAuthenticated && farcasterUser) {
-      // Create game user with Farcaster info
       fetch("/api/user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -34,6 +47,7 @@ export default function HomePage() {
         .then(r => r.json())
         .then(d => {
           setUser(d.user);
+          updateBoosterCosts();
           setLoading(false);
         })
         .catch(err => {
@@ -41,11 +55,11 @@ export default function HomePage() {
           setLoading(false);
         });
     } else if (!fcLoading && !isAuthenticated) {
-      // Not authenticated, try to load anonymous user
       fetch("/api/user")
         .then(r => r.json())
         .then(d => {
           setUser(d.user);
+          updateBoosterCosts();
           setLoading(false);
         })
         .catch(err => {
@@ -54,6 +68,20 @@ export default function HomePage() {
         });
     }
   }, [isAuthenticated, farcasterUser, fcLoading]);
+
+  // Fetch current booster costs in NFTs
+  async function updateBoosterCosts() {
+    try {
+      const res = await fetch("/api/booster/prices");
+      const data = await res.json();
+      if (data.nftCosts) {
+        setBoosterCosts(data.nftCosts);
+        setDailyMints(data.dailyMints);
+      }
+    } catch (error) {
+      console.error("Failed to fetch booster costs:", error);
+    }
+  }
 
   // Click handler
   async function handleClick() {
@@ -66,7 +94,12 @@ export default function HomePage() {
         return;
       }
       
-      setUser(prev => prev ? { ...prev, score: data.score, clicks: data.clicks } : prev);
+      setUser(prev => prev ? { 
+        ...prev, 
+        score: data.score, 
+        clicks: data.clicks,
+        totalEarned: data.totalEarned || prev.totalEarned 
+      } : prev);
       setGainFlash(data.gain);
       setTimeout(() => setGainFlash(null), 1000);
     } catch (error) {
@@ -75,24 +108,25 @@ export default function HomePage() {
   }
 
   // Leaderboard
-  async function openLeaderboard() {
+  async function openLeaderboard(type: 'current' | 'alltime' = 'current') {
     try {
-      const r = await fetch("/api/leaderboard");
+      const r = await fetch(`/api/leaderboard?type=${type}`);
       const d = await r.json();
       setLeaderboard(d.leaderboard || []);
+      setLeaderboardType(type);
       setShowBoard(true);
     } catch (error) {
       console.error("Failed to load leaderboard:", error);
     }
   }
 
-  // Shop actions
-  async function buy(type: "multiplier" | "autoclick" | "crit", cost: number) {
+  // Shop actions - now using NFTs!
+  async function buy(type: "multiplier" | "autoclick" | "crit") {
     try {
       const r = await fetch("/api/booster", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, cost }),
+        body: JSON.stringify({ type }),
       });
       const d = await r.json();
       if (d.error) {
@@ -100,17 +134,18 @@ export default function HomePage() {
         return;
       }
       setUser(d.user);
+      updateBoosterCosts();
     } catch (error) {
       console.error("Purchase failed:", error);
     }
   }
 
-  async function mintNFT(cost = 1000) {
+  async function mintNFT() {
     try {
       const r = await fetch("/api/nft/mint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cost }),
+        body: JSON.stringify({ pointsToSpend }),
       });
       const d = await r.json();
       if (d.error) {
@@ -118,7 +153,10 @@ export default function HomePage() {
         return;
       }
       setUser(d.user);
-      alert(`Minted Monad NFT #${d.tokenId} 🎉`);
+      setDailyMints({ used: d.user.dailyMints, remaining: d.remainingMints, total: 5 });
+      alert(`🎉 Success! Spent ${d.pointsSpent.toLocaleString()} points and earned ${d.nftsEarned} NFT${d.nftsEarned > 1 ? 's' : ''}!`);
+      setShowNftMint(false);
+      updateBoosterCosts(); // Refresh costs since user now has more NFTs
     } catch (error) {
       console.error("Mint failed:", error);
     }
@@ -284,7 +322,6 @@ export default function HomePage() {
         }
         .score-number {
           font-size: 3rem;
-          font-weight: 900;
           color: #fbbf24;
         }
         .click-area {
@@ -379,7 +416,7 @@ export default function HomePage() {
         }
         .modal-header {
           display: flex;
-          justify-content: between;
+          justify-content: space-between;
           align-items: center;
           margin-bottom: 20px;
         }
@@ -421,6 +458,71 @@ export default function HomePage() {
           background: rgba(255,255,255,0.05);
           border-radius: 8px;
         }
+        .tab-buttons {
+          display: flex;
+          margin-bottom: 16px;
+          border-radius: 12px;
+          background: rgba(255,255,255,0.05);
+          padding: 4px;
+        }
+        .tab-button {
+          flex: 1;
+          padding: 8px 16px;
+          border: none;
+          background: transparent;
+          color: rgba(255,255,255,0.7);
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.9rem;
+        }
+        .tab-button.active {
+          background: rgba(255,255,255,0.1);
+          color: white;
+        }
+        .input-group {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+        }
+        .input-field {
+          padding: 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.1);
+          color: white;
+          font-size: 1rem;
+          min-width: 120px;
+        }
+        .input-field:focus {
+          outline: none;
+          border-color: #a855f7;
+        }
+        .quick-amounts {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+        }
+        .quick-btn {
+          padding: 6px 12px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.1);
+          color: white;
+          font-size: 0.8rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .quick-btn:hover {
+          background: rgba(255,255,255,0.2);
+        }
+        .quick-btn.active {
+          background: #a855f7;
+          border-color: #a855f7;
+        }
       `}</style>
 
       <div className="container">
@@ -442,6 +544,34 @@ export default function HomePage() {
                 <p style={{ fontSize: '0.8rem', opacity: 0.6 }}>
                   {user.clicks.toLocaleString()} total transactions
                 </p>
+                <p style={{ fontSize: '0.8rem', opacity: 0.6, color: '#a855f7' }}>
+                  {user.totalEarned.toLocaleString()} lifetime earnings
+                </p>
+              </div>
+
+              {/* NFT Balance & Daily Mints */}
+              <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                <div style={{ 
+                  background: 'rgba(245, 158, 11, 0.1)', 
+                  padding: '12px', 
+                  borderRadius: '12px',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  marginBottom: '16px'
+                }}>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#f59e0b', marginBottom: '4px' }}>
+                    🖼️ {user.nfts} NFTs
+                  </div>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                    Power-Up Currency
+                  </div>
+                </div>
+                
+                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                  🎯 Daily Mints: {dailyMints.used}/{dailyMints.total} 
+                  {dailyMints.remaining > 0 && (
+                    <span style={{ color: '#10b981' }}> ({dailyMints.remaining} left)</span>
+                  )}
+                </div>
               </div>
 
               {/* Boosters */}
@@ -462,12 +592,6 @@ export default function HomePage() {
                     <span>💎 Critical Hit</span>
                     <span>{(user.boosters.critChance * 100).toFixed(0)}%</span>
                   </div>
-                  {user.nfts > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                      <span>🖼️ NFTs Owned</span>
-                      <span>{user.nfts}</span>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -487,17 +611,17 @@ export default function HomePage() {
             {/* Action Buttons */}
             <div className="buttons">
               <button className="button btn-shop" onClick={() => setShowShop(true)}>
-                🛒 Shop
+                🛒 NFT Shop
               </button>
-              <button className="button btn-ranks" onClick={openLeaderboard}>
+              <button className="button btn-ranks" onClick={() => openLeaderboard('current')}>
                 🏆 Ranks
               </button>
               <button 
                 className="button btn-nft" 
-                onClick={() => mintNFT(1000)}
-                disabled={user.score < 1000}
+                onClick={() => setShowNftMint(true)}
+                disabled={dailyMints.remaining <= 0}
               >
-                🪙 Mint NFT
+                {dailyMints.remaining > 0 ? '🪙 Mint NFT' : '❌ Daily Limit'}
               </button>
               <button className="button btn-about" onClick={() => setShowAbout(true)}>
                 ℹ️ About
@@ -506,62 +630,179 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Modals */}
+        {/* NFT-Based Shop Modal */}
         {showShop && user && (
           <div className="modal" onClick={() => setShowShop(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h3 className="modal-title">⚡ Power-Up Shop</h3>
+                <h3 className="modal-title">⚡ NFT Power-Up Shop</h3>
                 <button className="close-btn" onClick={() => setShowShop(false)}>×</button>
               </div>
+              
+              <div style={{ marginBottom: '20px', padding: '12px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#f59e0b' }}>
+                    🖼️ Your NFTs: {user.nfts}
+                  </span>
+                </div>
+              </div>
+
               <div style={{ display: 'grid', gap: '12px' }}>
                 <div className="shop-item">
                   <div>
                     <div style={{ fontWeight: 'bold', color: '#a855f7' }}>🔥 Click Multiplier +1</div>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Current: ×{user.boosters.multiplier}</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>×{user.boosters.multiplier} → ×{user.boosters.multiplier + 1}</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Max level: 10</div>
                   </div>
                   <button 
                     className="button btn-shop"
-                    onClick={() => buy("multiplier", 200)}
-                    disabled={user.score < 200}
+                    onClick={() => buy("multiplier")}
+                    disabled={user.nfts < boosterCosts.multiplier || user.boosters.multiplier >= 10}
                     style={{ padding: '8px 16px' }}
                   >
-                    200 🪙
+                    {boosterCosts.multiplier} 🖼️
                   </button>
                 </div>
                 <div className="shop-item">
                   <div>
                     <div style={{ fontWeight: 'bold', color: '#3b82f6' }}>🤖 Auto-Boost +1</div>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Current: +{user.boosters.autoclick}</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>+{user.boosters.autoclick} → +{user.boosters.autoclick + 1}</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Max level: 20</div>
                   </div>
                   <button 
                     className="button btn-ranks"
-                    onClick={() => buy("autoclick", 150)}
-                    disabled={user.score < 150}
+                    onClick={() => buy("autoclick")}
+                    disabled={user.nfts < boosterCosts.autoclick || user.boosters.autoclick >= 20}
                     style={{ padding: '8px 16px' }}
                   >
-                    150 🪙
+                    {boosterCosts.autoclick} 🖼️
                   </button>
                 </div>
                 <div className="shop-item">
                   <div>
                     <div style={{ fontWeight: 'bold', color: '#10b981' }}>💎 Critical Hit +5%</div>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Current: {(user.boosters.critChance*100).toFixed(0)}%</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>{(user.boosters.critChance*100).toFixed(0)}% → {Math.min((user.boosters.critChance + 0.05)*100, 50).toFixed(0)}%</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Max: 50%</div>
                   </div>
                   <button 
                     className="button"
-                    onClick={() => buy("crit", 250)}
-                    disabled={user.score < 250}
+                    onClick={() => buy("crit")}
+                    disabled={user.nfts < boosterCosts.crit || user.boosters.critChance >= 0.5}
                     style={{ padding: '8px 16px', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white' }}
                   >
-                    250 🪙
+                    {boosterCosts.crit} 🖼️
                   </button>
                 </div>
+              </div>
+              <div style={{ marginTop: '20px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                <p style={{ fontSize: '0.8rem', opacity: 0.7, margin: 0 }}>
+                  💡 Power-ups cost NFTs! NFT costs increase every few upgrades. Mint NFTs daily to keep upgrading!
+                </p>
               </div>
             </div>
           </div>
         )}
 
+        {/* Free NFT Mint Modal */}
+        {showNftMint && user && (
+          <div className="modal" onClick={() => setShowNftMint(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">🆓 Free Daily NFT Mint</h3>
+                <button className="close-btn" onClick={() => setShowNftMint(false)}>×</button>
+              </div>
+              <div>
+                <div style={{ 
+                  background: 'rgba(16, 185, 129, 0.1)', 
+                  padding: '16px', 
+                  borderRadius: '12px', 
+                  marginBottom: '16px',
+                  border: '1px solid rgba(16, 185, 129, 0.3)'
+                }}>
+                  <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🎁</div>
+                    <div style={{ fontWeight: 'bold', color: '#10b981' }}>FREE NFT MINTING</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                      Daily Limit: {dailyMints.used}/{dailyMints.total} mints used
+                    </div>
+                  </div>
+                </div>
+
+                <p style={{ marginBottom: '16px', opacity: 0.8 }}>
+                  Spend your points to mint NFTs for FREE! Use NFTs to buy power-ups in the shop.
+                </p>
+                
+                <div className="input-group">
+                  <label style={{ fontSize: '0.9rem', opacity: 0.8, minWidth: 'fit-content' }}>Points to spend:</label>
+                  <input 
+                    type="number" 
+                    min="1000"
+                    step="1000"
+                    max={Math.floor(user.score / 1000) * 1000}
+                    value={pointsToSpend}
+                    onChange={(e) => setPointsToSpend(Math.max(1000, Math.floor((parseInt(e.target.value) || 1000) / 1000) * 1000))}
+                    className="input-field"
+                  />
+                </div>
+
+                <div className="quick-amounts">
+                  <span style={{ fontSize: '0.8rem', opacity: 0.7, width: '100%', marginBottom: '8px', display: 'block' }}>
+                    Quick amounts:
+                  </span>
+                  {[1000, 2000, 5000, 10000].filter(amt => amt <= user.score).map(amount => (
+                    <button
+                      key={amount}
+                      className={`quick-btn ${pointsToSpend === amount ? 'active' : ''}`}
+                      onClick={() => setPointsToSpend(amount)}
+                    >
+                      {amount.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ 
+                  background: 'rgba(255,255,255,0.05)', 
+                  padding: '16px', 
+                  borderRadius: '12px', 
+                  marginBottom: '16px' 
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span>Points to spend:</span>
+                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{pointsToSpend.toLocaleString()} 🪙</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span>NFTs you'll get:</span>
+                    <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{pointsToSpend / 1000} 🖼️</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span>Your balance:</span>
+                    <span style={{ color: user.score >= pointsToSpend ? '#10b981' : '#ef4444' }}>
+                      {user.score.toLocaleString()} 🪙
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Remaining daily mints:</span>
+                    <span style={{ color: dailyMints.remaining > 0 ? '#10b981' : '#ef4444' }}>
+                      {dailyMints.remaining}/5
+                    </span>
+                  </div>
+                </div>
+
+                <button 
+                  className="button btn-nft"
+                  onClick={mintNFT}
+                  disabled={user.score < pointsToSpend || dailyMints.remaining <= 0}
+                  style={{ width: '100%', padding: '16px' }}
+                >
+                  {dailyMints.remaining <= 0 ? '❌ Daily Limit Reached' : 
+                   user.score >= pointsToSpend ? '🆓 Mint NFTs (FREE)' : '❌ Insufficient Balance'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leaderboard Modal */}
         {showBoard && (
           <div className="modal" onClick={() => setShowBoard(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -569,6 +810,23 @@ export default function HomePage() {
                 <h3 className="modal-title">🏆 Monad Champions</h3>
                 <button className="close-btn" onClick={() => setShowBoard(false)}>×</button>
               </div>
+              
+              {/* Tab Switcher */}
+              <div className="tab-buttons">
+                <button 
+                  className={`tab-button ${leaderboardType === 'current' ? 'active' : ''}`}
+                  onClick={() => openLeaderboard('current')}
+                >
+                  💰 Current Balance
+                </button>
+                <button 
+                  className={`tab-button ${leaderboardType === 'alltime' ? 'active' : ''}`}
+                  onClick={() => openLeaderboard('alltime')}
+                >
+                  🌟 All-Time Earnings
+                </button>
+              </div>
+
               <div>
                 {leaderboard.length === 0 && (
                   <p style={{ textAlign: 'center', opacity: 0.7, padding: '20px' }}>
@@ -578,19 +836,43 @@ export default function HomePage() {
                 {leaderboard.map((r, i) => (
                   <div key={`${r.username}-${i}`} className="leaderboard-item">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>#{i + 1}</span>
+                      <span style={{ 
+                        fontWeight: 'bold', 
+                        color: i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : '#fbbf24',
+                        fontSize: i < 3 ? '1.1rem' : '1rem'
+                      }}>
+                        {i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                      </span>
                       <span>{r.username}</span>
                     </div>
                     <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>
-                      {r.score.toLocaleString()}
+                      {leaderboardType === 'current' ? 
+                        r.score?.toLocaleString() : 
+                        r.totalEarned?.toLocaleString()
+                      }
                     </span>
                   </div>
                 ))}
+              </div>
+
+              <div style={{ 
+                marginTop: '16px', 
+                padding: '12px', 
+                background: 'rgba(255,255,255,0.05)', 
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                opacity: 0.7
+              }}>
+                {leaderboardType === 'current' ? 
+                  '💡 Current Balance: Points you have right now' :
+                  '💡 All-Time Earnings: Total points earned throughout your journey'
+                }
               </div>
             </div>
           </div>
         )}
 
+        {/* About Modal */}
         {showAbout && (
           <div className="modal" onClick={() => setShowAbout(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -604,8 +886,25 @@ export default function HomePage() {
                 </p>
                 <p style={{ marginBottom: '16px' }}>
                   A next-gen Web3 clicker game built on the blazing-fast Monad blockchain. 
-                  Click to earn tokens, unlock powerful boosters, and climb the leaderboards!
+                  Click to earn tokens, mint NFTs, and use them to buy powerful boosters!
                 </p>
+                
+                <h4 style={{ color: '#fbbf24', marginBottom: '8px' }}>🎯 Game Economy:</h4>
+                <ul style={{ marginBottom: '16px', paddingLeft: '20px', fontSize: '0.9rem' }}>
+                  <li><strong>Click</strong> to earn points</li>
+                  <li><strong>Spend points</strong> to mint NFTs (5 mints/day, FREE!)</li>
+                  <li><strong>Use NFTs</strong> to buy power-ups in the shop</li>
+                  <li><strong>Compete</strong> on dual leaderboards</li>
+                </ul>
+
+                <h4 style={{ color: '#f59e0b', marginBottom: '8px' }}>🖼️ NFT System:</h4>
+                <ul style={{ marginBottom: '16px', paddingLeft: '20px', fontSize: '0.9rem' }}>
+                  <li>Mint up to 5 times per day</li>
+                  <li>1000 points = 1 NFT, 2000 points = 2 NFTs, etc.</li>
+                  <li>NFTs are your currency for power-ups</li>
+                  <li>Power-up costs increase as you level up</li>
+                </ul>
+
                 <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>
                   Built with Next.js, TypeScript, and lots of ⚡
                 </p>
