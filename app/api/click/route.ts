@@ -1,17 +1,11 @@
-// app/api/click/route.ts - FIXED VERSION
+// app/api/click/route.ts - VERCEL POSTGRES VERSION
 
 import { NextResponse } from "next/server";
 import { getOrCreateUser } from "@/lib/db";
-import { Pool } from "pg";
+import { sql } from '@vercel/postgres';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
 
 function rollCrit(chance: number) {
   if (chance <= 0) return false;
@@ -38,30 +32,30 @@ export async function POST() {
     const newTotalEarned = user.totalEarned + finalGain;
     const newClicks = user.clicks + 1;
 
-    await pool.query(`
+    await sql`
       UPDATE users 
-      SET score = $2, clicks = $3, total_earned = $4, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-    `, [user.id, newScore, newClicks, newTotalEarned]);
+      SET score = ${newScore}, clicks = ${newClicks}, total_earned = ${newTotalEarned}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${user.id}
+    `;
 
     // Update leaderboards
-    await pool.query(`
+    await sql`
       INSERT INTO leaderboard_current (id, username, score)
-      VALUES ($1, $2, $3)
+      VALUES (${user.id}, ${user.username}, ${newScore})
       ON CONFLICT (id) DO UPDATE SET
       username = EXCLUDED.username,
       score = EXCLUDED.score,
       updated_at = CURRENT_TIMESTAMP
-    `, [user.id, user.username, newScore]);
+    `;
     
-    await pool.query(`
+    await sql`
       INSERT INTO leaderboard_alltime (id, username, total_earned)
-      VALUES ($1, $2, $3)
+      VALUES (${user.id}, ${user.username}, ${newTotalEarned})
       ON CONFLICT (id) DO UPDATE SET
       username = EXCLUDED.username,
       total_earned = EXCLUDED.total_earned,
       updated_at = CURRENT_TIMESTAMP
-    `, [user.id, user.username, newTotalEarned]);
+    `;
 
     return NextResponse.json({ 
       score: newScore, 

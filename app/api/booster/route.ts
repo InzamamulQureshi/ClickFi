@@ -1,17 +1,11 @@
-// app/api/booster/route.ts - FIXED VERSION
+// app/api/booster/route.ts - VERCEL POSTGRES VERSION
 
 import { NextResponse } from "next/server";
 import { getOrCreateUser, calculateBoosterNFTCost } from "@/lib/db";
-import { Pool } from "pg";
+import { sql } from '@vercel/postgres';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
@@ -64,11 +58,11 @@ export async function POST(req: Request) {
     }
 
     // Update user in database
-    await pool.query(`
+    await sql`
       UPDATE users 
-      SET nfts = $2, multiplier = $3, autoclick = $4, crit_chance = $5, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-    `, [user.id, newNFTs, newMultiplier, newAutoclick, newCritChance]);
+      SET nfts = ${newNFTs}, multiplier = ${newMultiplier}, autoclick = ${newAutoclick}, crit_chance = ${newCritChance}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${user.id}
+    `;
 
     // Return updated user data
     const updatedUser = {

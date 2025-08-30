@@ -1,16 +1,10 @@
-// app/api/leaderboard/route.ts - FIXED VERSION
+// app/api/leaderboard/route.ts - VERCEL POSTGRES VERSION
 
 import { NextResponse } from "next/server";
-import { Pool } from "pg";
+import { sql } from '@vercel/postgres';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,20 +14,20 @@ export async function GET(request: Request) {
     let leaderboard;
     
     if (type === 'alltime') {
-      const result = await pool.query(`
+      const result = await sql`
         SELECT username, total_earned as totalEarned
         FROM leaderboard_alltime
         ORDER BY total_earned DESC
         LIMIT 100
-      `);
+      `;
       leaderboard = result.rows;
     } else {
-      const result = await pool.query(`
+      const result = await sql`
         SELECT username, score
         FROM leaderboard_current
         ORDER BY score DESC
         LIMIT 100
-      `);
+      `;
       leaderboard = result.rows;
     }
     
