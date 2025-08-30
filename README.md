@@ -1,4 +1,4 @@
-# Monad Clicker 🎮
+# ClickFi 🎮
 
 A Farcaster miniapp clicker game built on Monad testnet.
 
