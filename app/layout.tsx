@@ -4,24 +4,24 @@ import { FarcasterProvider } from "@/lib/farcaster-auth";
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://your-domain.com'), // Add this to fix the warning
-  title: "Monad Clicker",
+  title: "MintClick",
   description: "Click to earn on Monad blockchain! 🚀 Compete with friends and unlock epic boosters!",
   openGraph: {
-    title: "Monad Clicker - Web3's Most Addictive Game",
+    title: "MintClick - Web3's Most Addictive Game",
     description: "Click, earn, and dominate on Monad blockchain! 🚀",
     images: [
       {
-        url: "/monad-clicker-preview.png",
+        url: "/MintClick-preview.png",
         width: 600,
         height: 400,
-        alt: "Monad Clicker Game Preview"
+        alt: "MintClick Game Preview"
       }
     ]
   },
   other: {
     // Farcaster MiniApp meta tags
     "fc:miniapp": JSON.stringify({
-      name: "Monad Clicker",
+      name: "MintClick",
       description: "Click to earn on Monad blockchain! Compete with friends and unlock boosters!",
       icon: "/icon.png",
       homeUrl: "/",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     // Backward compatibility
     "fc:frame": "vNext",
     "fc:frame:image": "/preview.png",
-    "fc:frame:button:1": "🎮 Play Monad Clicker",
+    "fc:frame:button:1": "🎮 Play MintClick",
     "fc:frame:button:1:action": "link",
     "fc:frame:button:1:target": "/"
   }

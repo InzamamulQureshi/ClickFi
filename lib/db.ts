@@ -1,5 +1,8 @@
+// lib/db.ts - FOR VERCEL POSTGRES
+
 import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
+import { sql } from '@vercel/postgres';
 
 type BoosterState = {
   multiplier: number;
@@ -15,30 +18,9 @@ export type UserRow = {
   boosters: BoosterState;
   nfts: number;
   totalEarned: number;
-  dailyMints: number; // Track daily mints
-  lastMintDate: string; // Track last mint date (YYYY-MM-DD format)
+  dailyMints: number;
+  lastMintDate: string;
 };
-
-type DB = {
-  users: Record<string, UserRow>;
-  leaderboard: { id: string; username: string; score: number }[];
-  alltimeLeaderboard: { id: string; username: string; totalEarned: number }[];
-};
-
-// In-memory database (will reset on server restart, but no file corruption issues)
-let memoryDB: DB = {
-  users: {},
-  leaderboard: [],
-  alltimeLeaderboard: []
-};
-
-export async function readDB(): Promise<DB> {
-  return memoryDB;
-}
-
-export async function writeDB(db: DB): Promise<void> {
-  memoryDB = { ...db };
-}
 
 export async function getOrSetUserIdCookie(): Promise<string> {
   const cookieStore = await cookies();
@@ -59,84 +41,122 @@ function getTodayString(): string {
   return new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 }
 
-export async function getOrCreateUser(username?: string): Promise<UserRow> {
-  const uid = await getOrSetUserIdCookie();
-  const db = await readDB();
-  
-  let user = db.users[uid];
-  if (!user) {
-    user = {
-      id: uid,
-      username: username || `Player-${uid.slice(0, 6)}`,
-      score: 0,
-      clicks: 0,
-      boosters: { multiplier: 1, autoclick: 0, critChance: 0 },
-      nfts: 0,
-      totalEarned: 0,
-      dailyMints: 0,
-      lastMintDate: getTodayString(),
-    };
-    db.users[uid] = user;
-    await writeDB(db);
-  } else if (username && username !== user.username) {
-    user.username = username;
-    db.users[uid] = user;
-    await writeDB(db);
+// Initialize tables if they don't exist
+export async function initializeTables() {
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        score BIGINT DEFAULT 0,
+        clicks BIGINT DEFAULT 0,
+        multiplier INTEGER DEFAULT 1,
+        autoclick INTEGER DEFAULT 0,
+        crit_chance DECIMAL(3,2) DEFAULT 0,
+        nfts INTEGER DEFAULT 0,
+        total_earned BIGINT DEFAULT 0,
+        daily_mints INTEGER DEFAULT 0,
+        last_mint_date DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS leaderboard_current (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        score BIGINT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS leaderboard_alltime (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        total_earned BIGINT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    // Create indexes if they don't exist
+    await sql`CREATE INDEX IF NOT EXISTS idx_leaderboard_current_score ON leaderboard_current(score DESC);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_leaderboard_alltime_total ON leaderboard_alltime(total_earned DESC);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_last_mint ON users(last_mint_date);`;
+    
+  } catch (error) {
+    console.error('Failed to initialize tables:', error);
   }
-  
-  // Ensure all fields exist (for migration of existing users)
-  if (!user.boosters) {
-    user.boosters = { multiplier: 1, autoclick: 0, critChance: 0 };
-  }
-  if (typeof user.totalEarned !== 'number') {
-    user.totalEarned = user.score;
-  }
-  if (typeof user.dailyMints !== 'number') {
-    user.dailyMints = 0;
-  }
-  if (!user.lastMintDate) {
-    user.lastMintDate = getTodayString();
-  }
-  
-  // Reset daily mints if it's a new day
-  const today = getTodayString();
-  if (user.lastMintDate !== today) {
-    user.dailyMints = 0;
-    user.lastMintDate = today;
-  }
-  
-  db.users[uid] = user;
-  await writeDB(db);
-  
-  return user;
 }
 
-export async function updateLeaderboard(user: UserRow): Promise<void> {
-  const db = await readDB();
+export async function getOrCreateUser(username?: string): Promise<UserRow> {
+  const uid = await getOrSetUserIdCookie();
   
-  // Update current balance leaderboard
-  const currentIdx = db.leaderboard.findIndex((r) => r.id === user.id);
-  if (currentIdx >= 0) {
-    db.leaderboard[currentIdx].score = user.score;
-    db.leaderboard[currentIdx].username = user.username;
-  } else {
-    db.leaderboard.push({ id: user.id, username: user.username, score: user.score });
+  try {
+    // Initialize tables on first run
+    await initializeTables();
+    
+    // Try to get existing user
+    const result = await sql`SELECT * FROM users WHERE id = ${uid}`;
+    
+    if (result.rows.length === 0) {
+      // Create new user
+      const newUsername = username || `Player-${uid.slice(0, 6)}`;
+      
+      await sql`
+        INSERT INTO users (id, username, score, clicks, multiplier, autoclick, crit_chance, nfts, total_earned, daily_mints, last_mint_date)
+        VALUES (${uid}, ${newUsername}, 0, 0, 1, 0, 0, 0, 0, 0, ${getTodayString()})
+      `;
+      
+      return {
+        id: uid,
+        username: newUsername,
+        score: 0,
+        clicks: 0,
+        boosters: { multiplier: 1, autoclick: 0, critChance: 0 },
+        nfts: 0,
+        totalEarned: 0,
+        dailyMints: 0,
+        lastMintDate: getTodayString()
+      };
+    }
+    
+    const user = result.rows[0];
+    
+    // Update username if provided
+    if (username && username !== user.username) {
+      await sql`UPDATE users SET username = ${username} WHERE id = ${uid}`;
+      user.username = username;
+    }
+    
+    // Reset daily mints if new day
+    const today = getTodayString();
+    if (user.last_mint_date !== today) {
+      await sql`UPDATE users SET daily_mints = 0, last_mint_date = ${today} WHERE id = ${uid}`;
+      user.daily_mints = 0;
+      user.last_mint_date = today;
+    }
+    
+    return {
+      id: user.id,
+      username: user.username,
+      score: parseInt(user.score),
+      clicks: parseInt(user.clicks),
+      boosters: {
+        multiplier: user.multiplier,
+        autoclick: user.autoclick,
+        critChance: parseFloat(user.crit_chance)
+      },
+      nfts: user.nfts,
+      totalEarned: parseInt(user.total_earned),
+      dailyMints: user.daily_mints,
+      lastMintDate: user.last_mint_date
+    };
+  } catch (error) {
+    console.error('Database error:', error);
+    throw new Error('Failed to get or create user');
   }
-  db.leaderboard.sort((a, b) => b.score - a.score);
-  db.leaderboard = db.leaderboard.slice(0, 100);
-
-  // Update all-time earnings leaderboard
-  const alltimeIdx = db.alltimeLeaderboard.findIndex((r) => r.id === user.id);
-  if (alltimeIdx >= 0) {
-    db.alltimeLeaderboard[alltimeIdx].totalEarned = user.totalEarned;
-    db.alltimeLeaderboard[alltimeIdx].username = user.username;
-  } else {
-    db.alltimeLeaderboard.push({ id: user.id, username: user.username, totalEarned: user.totalEarned });
-  }
-  db.alltimeLeaderboard.sort((a, b) => b.totalEarned - a.totalEarned);
-  db.alltimeLeaderboard = db.alltimeLeaderboard.slice(0, 100);
-
-  await writeDB(db);
 }
 
 // Helper function to calculate progressive NFT pricing for boosters
@@ -160,4 +180,17 @@ export function getRemainingMints(user: UserRow): number {
     return 5; // New day, fresh mints
   }
   return Math.max(0, 5 - user.dailyMints);
+}
+
+// Legacy functions for compatibility (no longer used but kept to avoid breaking existing imports)
+export async function readDB() {
+  return { users: {}, leaderboard: [], alltimeLeaderboard: [] };
+}
+
+export async function writeDB() {
+  // No-op for compatibility
+}
+
+export async function updateLeaderboard() {
+  // This is now handled directly in the API routes
 }
